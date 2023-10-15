@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -29,6 +31,11 @@ func init() {
 	}
 
 	collection = client.Database("Tournament").Collection("teams")
+}
+
+func containsOnlyLetters(str string) bool {
+	reg := regexp.MustCompile("^[A-Za-z]+$")
+	return reg.MatchString(str)
 }
 
 type Team struct {
@@ -56,6 +63,10 @@ func main() {
 
 					if playerOne == "" || playerTwo == "" {
 						return errors.New("Specify names for both players")
+					} else if playerOne == playerTwo{
+						return errors.New("Each player's name must be unique")
+					} else if containsOnlyLetters(playerOne) == false || containsOnlyLetters(playerTwo) == false {
+						return errors.New("Each players name cannot contain numbers or special characters")
 					}
 
 					team := &Team{
@@ -67,6 +78,8 @@ func main() {
 						Win:       false,
 						PointTotal: 0,
 					}
+
+					fmt.Printf("Successfully added %s and %s to team ID %s", playerOne, playerTwo, team.ID.Hex())
 
 					return createTeam(team)
 				},
