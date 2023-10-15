@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/urfave/cli/v2"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -46,6 +47,7 @@ type Team struct {
 	PlayerTwo string             `bson:"player_2"`
 	Win       bool               `bson:"win"`
 	PointTotal int               `bson:"point_total"`
+	SeedNumber int				 `bson: "seed_number"`
 }
 
 func main() {
@@ -83,19 +85,46 @@ func main() {
 
 					return createTeam(team)
 				},
-			},
-			{
+			},{
 				Name:    "list",
 				Aliases: []string{"l"},
 				Usage:   "list all the teams",
 				Action: func(c *cli.Context) error {
-					// Implement functionality to retrieve and display all teams
-					// from the MongoDB collection. 
-					// E.g., run a find() query and format the output for CLI.
+					// A filter for finding all documents. 
+					// filter is an empty map that returns all documents in my Tournament collection
+					filter := bson.M{}
+					
+					// Using context with timeout to avoid potential forever waiting.
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel() // cancel the context when the operation completes.
+					
+					// find requires two args, context and filter. 
+					cursor, err := collection.Find(ctx, filter)
+					if err != nil {
+						log.Fatal(err) // Properly handle error, according to your application logic.
+					}
+					defer cursor.Close(ctx) // cursor is a pointer to my collection, close if it after use. 
+			
+					// Iterate through the cursor and decode each document. 
+					for cursor.Next(ctx) {
+						var team Team
+						if err := cursor.Decode(&team); err != nil {
+							log.Fatal(err) // Handle errors during cursor decoding
+						}
+						//print out info from team struct 
+						fmt.Printf("Team ID: %s, Player One: %s, Player Two: %s\n", team.ID.Hex(), team.PlayerOne, team.PlayerTwo)
+					}
+					
+					// Check if the cursor encountered any errors while iterating.
+					if err := cursor.Err(); err != nil {
+						log.Fatal(err) // Handle the cursor error
+					}
+			
 					return nil
 				},
 			},
-			// Add additional commands as per your requirement
+			
+			
 		},
 	}
 
