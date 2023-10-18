@@ -17,11 +17,16 @@ import (
 )
 
 var collection *mongo.Collection
+var client *mongo.Client
+
 var ctx = context.TODO()
 
+var matchesCollection *mongo.Collection
+
 func init() {
+	var err error
 	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017/")
-	client, err := mongo.Connect(ctx, clientOptions)
+	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -32,14 +37,20 @@ func init() {
 	}
 
 	collection = client.Database("Tournament").Collection("teams")
+
+	collection = client.Database("Tournament").Collection("teams")
+	matchesCollection = client.Database("Tournament").Collection("matches") // New collection for matches
 }
+
 
 func containsOnlyLetters(str string) bool {
 	reg := regexp.MustCompile("^[A-Za-z]+$")
 	return reg.MatchString(str)
 }
 
+//using counters collection
 type Team struct {
+	TeamID    int                 `bson:"team_id"`
 	ID        primitive.ObjectID `bson:"_id"`
 	CreatedAt time.Time          `bson:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at"`
@@ -49,6 +60,18 @@ type Team struct {
 	PointTotal int               `bson:"point_total"`
 	SeedNumber int				 `bson: "seed_number"`
 }
+
+type Match struct {
+	TeamOne	primitive.ObjectID				`bson:"team_one`
+	TeamTwo	primitive.ObjectID			`bson:"team_two"`
+	Winner	primitive.ObjectID				`bson: "winner"`
+	PointsLost int			`bson: "points_lost"`
+	PointsWon int				`bson: "points_won"`
+}
+
+
+
+
 
 func main() {
 	app := &cli.App{
@@ -122,6 +145,38 @@ func main() {
 			
 					return nil
 				},
+			}, // Global variable for matches collection
+			
+			// Simplified version of the "Match" command.
+			{
+				Name: "match",
+				Aliases: []string{"m"},
+				Usage: "Create a match between two teams",
+				Action: func(c *cli.Context) error {
+					teamOneId := c.Args().Get(0) // Getting team IDs as input (validation is needed!)
+					teamTwoId := c.Args().Get(1)
+			
+					// Convert hexadecimal representation of object ID to actual ObjectID.
+					teamOneObjectId, err := primitive.ObjectIDFromHex(teamOneId)
+					if err != nil {
+						log.Fatal(err)
+					}
+					teamTwoObjectId, err := primitive.ObjectIDFromHex(teamTwoId)
+					if err != nil {
+						log.Fatal(err)
+					}
+			
+					// Creating a new match document.
+					match := &Match{
+						TeamOne: teamOneObjectId,
+						TeamTwo: teamTwoObjectId,
+						PointsLost: 0, // Initial values can be set to zero, or take input from user
+						PointsWon: 0,
+					}
+			
+					fmt.Printf("Creating match between Team %s and Team %s...\n", teamOneId, teamTwoId)
+					return createMatch(match) // Separate function to handle the creation of a match
+				},
 			},
 			
 			
@@ -134,7 +189,38 @@ func main() {
 	}
 }
 
+func getNextTeamID() (int, error) {
+    countersCollection := client.Database("Tournament").Collection("counters")
+    
+    filter := bson.M{"_id": "teamID"}
+    update := bson.M{"$inc": bson.M{"seq": 1}}
+    opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+    
+    var result struct {
+        Seq int `bson:"seq"`
+    }
+    
+    err := countersCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&result)
+    
+    if err != nil {
+        return 0, err
+    }
+    
+    return result.Seq, nil
+}
+
 func createTeam(team *Team) error {
-	_, err := collection.InsertOne(ctx, team)
+    nextID, err := getNextTeamID()
+    if err != nil {
+        return err
+    }
+    team.TeamID = nextID
+    _, err = collection.InsertOne(ctx, team)
+    return err
+}
+
+
+func createMatch(match *Match) error {
+	_,err := collection.InsertOne(ctx, match)
 	return err
 }
