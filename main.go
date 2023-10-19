@@ -50,23 +50,24 @@ func containsOnlyLetters(str string) bool {
 
 //using counters collection
 type Team struct {
-	TeamID    int                 `bson:"team_id"`
+	TeamID    int                `bson:"team_id"`
 	ID        primitive.ObjectID `bson:"_id"`
 	CreatedAt time.Time          `bson:"created_at"`
 	UpdatedAt time.Time          `bson:"updated_at"`
 	PlayerOne string             `bson:"player_1"`
 	PlayerTwo string             `bson:"player_2"`
-	Win       bool               `bson:"win"`
+	Wins       int               `bson:"wins"`
+	Losses	   int 				 `bson:"losses"`
 	PointTotal int               `bson:"point_total"`
-	SeedNumber int				 `bson: "seed_number"`
+	SeedNumber int				 `bson:"seed_number"`
 }
 
 type Match struct {
-	TeamOne	primitive.ObjectID				`bson:"team_one`
-	TeamTwo	primitive.ObjectID			`bson:"team_two"`
-	Winner	primitive.ObjectID				`bson: "winner"`
-	PointsLost int			`bson: "points_lost"`
-	PointsWon int				`bson: "points_won"`
+	TeamOne	primitive.ObjectID	`bson:"team_one"`
+	TeamTwo	primitive.ObjectID	`bson:"team_two"`
+	Winner	primitive.ObjectID	`bson:"winner"`
+	PointsLost int				`bson:"points_lost"`
+	PointsWon int				`bson:"points_won"`
 }
 
 
@@ -100,11 +101,10 @@ func main() {
 						UpdatedAt: time.Now(),
 						PlayerOne: playerOne,
 						PlayerTwo: playerTwo,
-						Win:       false,
-						PointTotal: 0,
+						
 					}
 
-					fmt.Printf("Successfully added %s and %s to team ID %s", playerOne, playerTwo, team.ID.Hex())
+					fmt.Printf("Successfully added %s and %s to team ID %d", playerOne, playerTwo, team.TeamID)
 
 					return createTeam(team)
 				},
@@ -135,7 +135,7 @@ func main() {
 							log.Fatal(err) // Handle errors during cursor decoding
 						}
 						//print out info from team struct 
-						fmt.Printf("Team ID: %s, Player One: %s, Player Two: %s\n", team.ID.Hex(), team.PlayerOne, team.PlayerTwo)
+						fmt.Printf("Team ID: %d, Player One: %s, Player Two: %s, Seed: %d\n", team.TeamID, team.PlayerOne, team.PlayerTwo, team.SeedNumber)
 					}
 					
 					// Check if the cursor encountered any errors while iterating.
@@ -177,6 +177,18 @@ func main() {
 					fmt.Printf("Creating match between Team %s and Team %s...\n", teamOneId, teamTwoId)
 					return createMatch(match) // Separate function to handle the creation of a match
 				},
+			},{
+				Name: "result",
+				Aliases: []string{"r"},
+				Usage: "Mark the wins and losses for a team",
+				Action: func(c *cli.Context) error {
+					teamOneId := c.Args().Get(0) // Getting team IDs as input (validation is needed!)
+					teamTwoId := c.Args().Get(1)
+
+
+
+				},
+
 			},
 			
 			
@@ -224,3 +236,6 @@ func createMatch(match *Match) error {
 	_,err := collection.InsertOne(ctx, match)
 	return err
 }
+
+
+//next create func to calculate seed number for each team based on w/l and points
