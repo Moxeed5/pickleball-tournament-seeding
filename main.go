@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/urfave/cli/v2"
@@ -63,6 +64,7 @@ type Team struct {
 }
 
 type Match struct {
+	MatchID int					`bson:"match_id"`
 	TeamOne	primitive.ObjectID	`bson:"team_one"`
 	TeamTwo	primitive.ObjectID	`bson:"team_two"`
 	Winner	primitive.ObjectID	`bson:"winner"`
@@ -174,7 +176,7 @@ func main() {
 						PointsWon: 0,
 					}
 			
-					fmt.Printf("Creating match between Team %s and Team %s...\n", teamOneId, teamTwoId)
+					fmt.Printf("Creating match %d between Team %s and Team %s...\n", match.MatchID, teamOneId, teamTwoId)
 					return createMatch(match) // Separate function to handle the creation of a match
 				},
 			},{
@@ -182,8 +184,36 @@ func main() {
 				Aliases: []string{"r"},
 				Usage: "Mark the wins and losses for a team",
 				Action: func(c *cli.Context) error {
-					teamOneId := c.Args().Get(0) // Getting team IDs as input (validation is needed!)
-					teamTwoId := c.Args().Get(1)
+					//when I get cmd line args, they come in as strings. So I need to convert the user provided match ID from a string to an int
+					matchID, err := strconv.Atoi(c.Args().Get(0))
+					if err !=nil {
+						return err
+					}
+					winningTeamID := c.Args().Get(1)
+    				PointsLost := c.Args().Get(2)
+    				PointsWon := c.Args().Get(3)
+
+					//creating filter to find the correct match in MongoDb. 
+
+					filter := bson.M{"match_id": matchID}
+
+					update := bson.M{
+						"$set": bson.M{
+							"winner": winningTeamID,
+							"points_lost": PointsLost,
+							"points_won": PointsWon,
+						},
+					}
+
+					_, err = matchesCollection.UpdateOne(ctx, filter, update)
+					if err != nil {
+   						return err
+					}
+
+					
+
+
+
 
 
 
@@ -221,6 +251,27 @@ func getNextTeamID() (int, error) {
     return result.Seq, nil
 }
 
+func getNextMatchID() (int, error) {
+    countersCollection := client.Database("Tournament").Collection("counters")
+    
+    filter := bson.M{"_id": "MatchID"}
+    update := bson.M{"$inc": bson.M{"seq": 1}}
+    opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+    
+    var result struct {
+        Seq int `bson:"seq"`
+    }
+    
+    err := countersCollection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&result)
+    
+    if err != nil {
+        return 0, err
+    }
+    
+    return result.Seq, nil
+}
+
+
 func createTeam(team *Team) error {
     nextID, err := getNextTeamID()
     if err != nil {
@@ -233,9 +284,14 @@ func createTeam(team *Team) error {
 
 
 func createMatch(match *Match) error {
-	_,err := collection.InsertOne(ctx, match)
+	nextID, err := getNextMatchID()
+	if err != nil {
+		return err
+	}
+	match.MatchID = nextID
+	_,err = collection.InsertOne(ctx, match)
 	return err
 }
 
 
-//next create func to calculate seed number for each team based on w/l and points
+//next create func to calculate seed number for each team based on w/l and
