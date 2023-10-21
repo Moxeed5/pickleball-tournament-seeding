@@ -65,9 +65,9 @@ type Team struct {
 
 type Match struct {
 	MatchID int					`bson:"match_id"`
-	TeamOne	primitive.ObjectID	`bson:"team_one"`
-	TeamTwo	primitive.ObjectID	`bson:"team_two"`
-	Winner	primitive.ObjectID	`bson:"winner"`
+	TeamOne	int	`bson:"team_one"`
+	TeamTwo	int	`bson:"team_two"`
+	Winner	int	`bson:"winner"`
 	PointsLost int				`bson:"points_lost"`
 	PointsWon int				`bson:"points_won"`
 }
@@ -89,6 +89,11 @@ func main() {
 					playerOne := c.Args().Get(0)
 					playerTwo := c.Args().Get(1)
 
+					teamID, err := getNextTeamID()
+					if err != nil {
+						return err
+					}
+
 					if playerOne == "" || playerTwo == "" {
 						return errors.New("Specify names for both players")
 					} else if playerOne == playerTwo{
@@ -98,7 +103,7 @@ func main() {
 					}
 
 					team := &Team{
-						ID:        primitive.NewObjectID(),
+						TeamID:        teamID,
 						CreatedAt: time.Now(),
 						UpdatedAt: time.Now(),
 						PlayerOne: playerOne,
@@ -150,48 +155,57 @@ func main() {
 			}, // Global variable for matches collection
 			
 			// Simplified version of the "Match" command.
+
 			{
-				Name: "match",
+				Name:    "match",
 				Aliases: []string{"m"},
-				Usage: "Create a match between two teams",
+				Usage:   "Create a match between two teams",
 				Action: func(c *cli.Context) error {
-					teamOneId := c.Args().Get(0) // Getting team IDs as input (validation is needed!)
-					teamTwoId := c.Args().Get(1)
-			
-					// Convert hexadecimal representation of object ID to actual ObjectID.
-					teamOneObjectId, err := primitive.ObjectIDFromHex(teamOneId)
+					teamOneId, err := strconv.Atoi(c.Args().Get(0))
 					if err != nil {
-						log.Fatal(err)
-					}
-					teamTwoObjectId, err := primitive.ObjectIDFromHex(teamTwoId)
-					if err != nil {
-						log.Fatal(err)
+						return errors.New("Invalid Team One ID")
 					}
 			
-					// Creating a new match document.
+					teamTwoId, err := strconv.Atoi(c.Args().Get(1))
+					if err != nil {
+						return errors.New("Invalid Team Two ID")
+					}
+			
 					match := &Match{
-						TeamOne: teamOneObjectId,
-						TeamTwo: teamTwoObjectId,
-						PointsLost: 0, // Initial values can be set to zero, or take input from user
-						PointsWon: 0,
+						TeamOne:    teamOneId,
+						TeamTwo:    teamTwoId,
+						PointsLost: 0,
+						PointsWon:  0,
 					}
 			
-					fmt.Printf("Creating match %d between Team %s and Team %s...\n", match.MatchID, teamOneId, teamTwoId)
-					return createMatch(match) // Separate function to handle the creation of a match
+					fmt.Printf("Creating match between Team %d and Team %d...\n", teamOneId, teamTwoId)
+					return createMatch(match)
 				},
-			},{
+			},
+			
+			{
 				Name: "result",
 				Aliases: []string{"r"},
-				Usage: "Mark the wins and losses for a team",
+				Usage: "Record the results of a match",
 				Action: func(c *cli.Context) error {
 					//when I get cmd line args, they come in as strings. So I need to convert the user provided match ID from a string to an int
 					matchID, err := strconv.Atoi(c.Args().Get(0))
 					if err !=nil {
 						return err
 					}
-					winningTeamID := c.Args().Get(1)
-    				PointsLost := c.Args().Get(2)
-    				PointsWon := c.Args().Get(3)
+					winningTeamID, err := strconv.Atoi(c.Args().Get(1))
+					if err != nil {
+						return err
+					}
+    				PointsLost, err := strconv.Atoi(c.Args().Get(2))
+					if err != nil {
+						return err
+					}
+    				PointsWon, err := strconv.Atoi(c.Args().Get(3))
+					if err != nil {
+						return err
+					}
+
 
 					//creating filter to find the correct match in MongoDb. 
 
@@ -211,11 +225,8 @@ func main() {
 					}
 
 					
-
-
-
-
-
+					fmt.Println("Match result updated successfully")
+					return nil
 
 				},
 
@@ -223,7 +234,7 @@ func main() {
 			
 			
 		},
-	}
+	}	
 
 	err := app.Run(os.Args)
 	if err != nil {
@@ -273,14 +284,10 @@ func getNextMatchID() (int, error) {
 
 
 func createTeam(team *Team) error {
-    nextID, err := getNextTeamID()
-    if err != nil {
-        return err
-    }
-    team.TeamID = nextID
-    _, err = collection.InsertOne(ctx, team)
+    _, err := collection.InsertOne(ctx, team)
     return err
 }
+
 
 
 func createMatch(match *Match) error {
@@ -289,9 +296,11 @@ func createMatch(match *Match) error {
 		return err
 	}
 	match.MatchID = nextID
-	_,err = collection.InsertOne(ctx, match)
+	_, err = matchesCollection.InsertOne(ctx, match) // Use matchesCollection here instead of collection
 	return err
 }
+
+
 
 
 //next create func to calculate seed number for each team based on w/l and
