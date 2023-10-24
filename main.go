@@ -59,7 +59,8 @@ type Team struct {
 	PlayerTwo string             `bson:"player_2"`
 	Wins       int               `bson:"wins"`
 	Losses	   int 				 `bson:"losses"`
-	PointTotal int               `bson:"point_total"`
+	PointsLost int               `bson:"points_lost"`
+	PointsWon int				`bson:"points_won"`
 	SeedNumber int				 `bson:"seed_number"`
 }
 
@@ -223,6 +224,47 @@ func main() {
 					if err != nil {
    						return err
 					}
+
+					var match Match
+					
+        err = matchesCollection.FindOne(ctx, filter).Decode(&match)
+        if err != nil {
+            return err
+        }
+
+        // Update the winning team
+        winningTeamFilter := bson.M{"team_id": match.Winner}
+        winningTeamUpdate := bson.M{
+            "$inc": bson.M{
+                "wins":        1,
+                "points_lost": PointsLost,
+				"points_won": 11,
+            },
+        }
+        _, err = collection.UpdateOne(ctx, winningTeamFilter, winningTeamUpdate)
+        if err != nil {
+            return err
+        }
+
+        // Identify the losing team
+        losingTeamID := match.TeamOne
+        if match.TeamOne == match.Winner {
+            losingTeamID = match.TeamTwo
+        }
+
+        // Update the losing team
+        losingTeamFilter := bson.M{"team_id": losingTeamID}
+        losingTeamUpdate := bson.M{
+            "$inc": bson.M{
+                "losses":      1,
+                "points_won": PointsWon,
+				
+            },
+        }
+        _, err = collection.UpdateOne(ctx, losingTeamFilter, losingTeamUpdate)
+        if err != nil {
+            return err
+        }
 
 					
 					fmt.Println("Match result updated successfully")
