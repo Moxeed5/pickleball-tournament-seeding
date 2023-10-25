@@ -156,6 +156,47 @@ func main() {
 			}, // Global variable for matches collection
 			
 			// Simplified version of the "Match" command.
+			{
+				Name:    "show matches",
+				Aliases: []string{"sm"},
+				Usage:   "list all the matches",
+				Action: func(c *cli.Context) error {
+					// A filter for finding all documents. 
+					// filter is an empty map that returns all documents in my Tournament collection
+					filter := bson.M{}
+					
+					// Using context with timeout to avoid potential forever waiting.
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel() // cancel the context when the operation completes.
+					
+					// find requires two args, context and filter. 
+					cursor, err := matchesCollection.Find(ctx, filter)
+					if err != nil {
+						log.Fatal(err) // Properly handle error, according to your application logic.
+					}
+					defer cursor.Close(ctx) // cursor is a pointer to my collection, close if it after use. 
+
+					
+			
+					// Iterate through the cursor and decode each document. 
+					for cursor.Next(ctx) {
+						var match Match
+						if err := cursor.Decode(&match); err != nil {
+							log.Fatal(err) // Handle errors during cursor decoding
+						}
+						
+						//print out info from team struct 
+						fmt.Printf("Match ID: %d, Team One: %d, Team Two: %d, Winner: %d\n", match.MatchID, match.TeamOne, match.TeamTwo, match.Winner)
+					}
+					
+					// Check if the cursor encountered any errors while iterating.
+					if err := cursor.Err(); err != nil {
+						log.Fatal(err) // Handle the cursor error
+					}
+			
+					return nil
+				},
+			},
 
 			{
 				Name:    "match",
@@ -275,7 +316,7 @@ func main() {
 			},
 			
 			
-		},
+		}, 
 	}	
 
 	err := app.Run(os.Args)
