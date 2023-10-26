@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"time"
 
@@ -63,6 +64,24 @@ type Team struct {
 	PointsWon int				`bson:"points_won"`
 	SeedNumber int				 `bson:"seed_number"`
 }
+
+type ByWins []Team
+
+func (a ByWins) Len() int {return len(a)}
+	func (a ByWins) Less(i, j int) bool {return a[1].Wins < a[j].Wins}
+	func (a ByWins) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+type ByPointsWon []Team
+
+func (a ByPointsWon) Len() int {return len(a)}
+func (a ByPointsWon) Less(i, j int) bool {return a[1].PointsWon < a[j].PointsWon}
+func (a ByPointsWon) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+type ByPointsLost []Team
+
+func (a ByPointsLost) Len() int {return len(a)}
+func (a ByPointsLost) Less(i, j int) bool {return a[1].PointsLost < a[j].PointsLost}
+func (a ByPointsLost) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 type Match struct {
 	MatchID int					`bson:"match_id"`
@@ -365,13 +384,29 @@ func getNextMatchID() (int, error) {
     return result.Seq, nil
 }
 
+var byWins ByWins
 
 func createTeam(team *Team) error {
     _, err := collection.InsertOne(ctx, team)
-    return err
+	if err != nil{
+    	return err
+	}
+
+	byWins = append(byWins, *team)
+	return nil
 }
 
+func seedTeams(teams *ByWins) ByWins {
+	
+	sortedTeamList := make(ByWins, len(*teams))
+	copy(sortedTeamList, *teams)
 
+	sort.Sort(sortedTeamList)
+
+	return sortedTeamList
+	
+	
+}
 
 func createMatch(match *Match) error {
 	nextID, err := getNextMatchID()
