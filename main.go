@@ -283,7 +283,16 @@ func main() {
 						team.SeedNumber = index +1 
 
 						fmt.Printf("Team ID: %d, Team Seed: %d\n", team.TeamID, team.SeedNumber)
-					}
+					
+						filter := bson.M{"team_id": team.TeamID}
+            			update := bson.M{"$set": bson.M{"seed_number": team.SeedNumber}}
+
+            			// Update the team in MongoDB
+            			_, err := collection.UpdateOne(ctx, filter, update)
+            			if err != nil {
+                			return err
+            			}	
+					}	
 					return nil
 				},
 			},
