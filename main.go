@@ -38,7 +38,7 @@ func init() {
 		log.Fatal(err)
 	}
 
-	collection = client.Database("Tournament").Collection("teams")
+	
 
 	collection = client.Database("Tournament").Collection("teams")
 	matchesCollection = client.Database("Tournament").Collection("matches") // New collection for matches
@@ -68,20 +68,22 @@ type Team struct {
 type ByWins []Team
 
 func (a ByWins) Len() int {return len(a)}
-	func (a ByWins) Less(i, j int) bool {return a[1].Wins < a[j].Wins}
+	func (a ByWins) Less(i, j int) bool {return a[i].Wins < a[j].Wins}
 	func (a ByWins) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-
-type ByPointsWon []Team
-
-func (a ByPointsWon) Len() int {return len(a)}
-func (a ByPointsWon) Less(i, j int) bool {return a[1].PointsWon < a[j].PointsWon}
-func (a ByPointsWon) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 
 type ByPointsLost []Team
 
 func (a ByPointsLost) Len() int {return len(a)}
-func (a ByPointsLost) Less(i, j int) bool {return a[1].PointsLost < a[j].PointsLost}
+func (a ByPointsLost) Less(i, j int) bool {return a[i].PointsLost < a[j].PointsLost}
 func (a ByPointsLost) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+type ByPointsWon []Team
+
+func (a ByPointsWon) Len() int {return len(a)}
+func (a ByPointsWon) Less(i, j int) bool {return a[i].PointsWon > a[j].PointsWon}
+func (a ByPointsWon) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+
 
 type Match struct {
 	MatchID int					`bson:"match_id"`
@@ -243,6 +245,48 @@ func main() {
 					return createMatch(match)
 				},
 			},
+			{
+				Name: "Seed",
+				Aliases: []string{"s"},
+				Usage: "Seed the teams based on match results",
+				Action: func(cliCtx *cli.Context) error {
+					
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+
+				filter := bson.M{}
+				cursor, err := collection.Find(ctx, filter)
+				if err != nil {
+					return err
+				}
+				defer cursor.Close(ctx)
+
+				var teams ByWins
+				for cursor.Next(ctx) {
+				var team Team
+				if err := cursor.Decode(&team); err != nil {
+					return err
+				}
+				teams = append(teams, team)
+				}
+					winners, losers = winOrLose(&teams)
+
+					sort.Sort(ByPointsLost(winners))
+
+					sort.Sort(ByPointsWon(losers))
+
+					seededTeams := append(winners, losers...)
+
+					
+
+					for index, team := range seededTeams {
+						team.SeedNumber = index +1 
+
+						fmt.Printf("Team ID: %d, Team Seed: %d\n", team.TeamID, team.SeedNumber)
+					}
+					return nil
+				},
+			},
 			
 			{
 				Name: "result",
@@ -336,6 +380,7 @@ func main() {
 			
 			
 		}, 
+		
 	}	
 
 	err := app.Run(os.Args)
@@ -385,6 +430,9 @@ func getNextMatchID() (int, error) {
 }
 
 var byWins ByWins
+var teamList ByWins
+var losers ByWins
+var winners ByWins
 
 func createTeam(team *Team) error {
     _, err := collection.InsertOne(ctx, team)
@@ -396,17 +444,27 @@ func createTeam(team *Team) error {
 	return nil
 }
 
-func seedTeams(teams *ByWins) ByWins {
+func winOrLose(teams *ByWins) (winners, losers ByWins) {
 	
-	sortedTeamList := make(ByWins, len(*teams))
-	copy(sortedTeamList, *teams)
+	// sortedTeamList := make(ByWins, len(*teams))
+	// copy(sortedTeamList, *teams)
 
-	sort.Sort(sortedTeamList)
-
-	return sortedTeamList
+	// sort.Sort(sortedTeamList)
 	
+	for _, team := range *teams {
+		if team.Wins == 0 {
+			losers = append(losers, team)
+		} else {
+			winners = append(winners, team)
+		}
+
+	}
+
+	return  winners, losers
 	
 }
+
+
 
 func createMatch(match *Match) error {
 	nextID, err := getNextMatchID()
@@ -421,4 +479,6 @@ func createMatch(match *Match) error {
 
 
 
-//next create func to calculate seed number for each team based on w/l and
+//for seeding, I need to make rounds. The first iteration of this will be for double elim. I might make a cmd to set a var to round. It will calculate number of round based
+//on number of players. Pressing the command will proceed to the next round. Matches will be associated to rounds. I'm not sure of the best way to make the 
+//association. 
